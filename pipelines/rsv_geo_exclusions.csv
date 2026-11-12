@@ -11,6 +11,19 @@ forecast_date,forecaster,geo_value,ahead,weight
 2024-10-01, climate_base, all,, 2
 2024-10-01, climate_geo_agged, all,, 0
 ##################
+# Nov 11
+##################
+2026-11-11, all, mp,, 0
+2026-11-11, windowed_seasonal, all,, 1
+2026-11-11, nssp_exogenous, all,, 1
+2026-11-11, revision_aware, all,, 1
+2026-11-11, climate_linear, all,, 0.001
+2026-11-11, linear, all,, 3
+2026-11-11, climate_base, all,, 2
+2026-11-11, climate_geo_agged, all,, 0
+2026-11-11, revision_aware, dc, 0, 0.25
+2026-11-11, revision_aware, vt, 0, 0.25
+##################
 # Nov 4
 ##################
 2026-11-04, all, mp,, 0
