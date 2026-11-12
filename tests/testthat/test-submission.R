@@ -79,3 +79,25 @@ test_that("validate_submission_or_abort summarizes the rows a custom check flagg
   expect_match(conditionMessage(err), "location US, wk inc flu prop ed visits, horizon 3: 2 value(s), max 1.26, from quantile 0.9 up", fixed = TRUE)
   expect_match(conditionMessage(err), "location CA, wk inc flu prop ed visits, horizon 3: 1 value(s), max 0.28, from quantile 0.99 up", fixed = TRUE)
 })
+
+test_that("validate_submission_or_abort skips the submission window check only on delayed prod runs", {
+  passing <- as_collection(
+    valid_config = structure(list(message = "Config valid."), class = c("check_success", "hub_check")),
+    file_exists = structure(list(message = "File exists."), class = c("check_success", "hub_check"))
+  )
+  skipped <- NULL
+  local_mocked_bindings(
+    validate_submission = function(..., skip_submit_window_check) {
+      skipped <<- skip_submit_window_check
+      passing
+    },
+    .package = "hubValidations"
+  )
+  local_mocked_bindings(Sys.Date = function() as.Date("2026-11-12"), .package = "base")
+  validate_submission_or_abort("hub", "model/file.csv")
+  expect_true(skipped)
+
+  local_mocked_bindings(Sys.Date = function() as.Date("2026-11-19"), .package = "base")
+  validate_submission_or_abort("hub", "model/file.csv")
+  expect_false(skipped)
+})

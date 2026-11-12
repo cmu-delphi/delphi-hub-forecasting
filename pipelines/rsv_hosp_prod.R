@@ -44,11 +44,7 @@ g_reference_date <- {
 # stay row-aligned by construction (see flu_hosp_prod.R for column docs).
 if (!g_evaluation_mode) {
   gen_dates <- g_reference_date
-  fc_dates <- floor_date(gen_dates, "weeks", week_start = 3)
-  # the forecast is actually for the wednesday beforehand for these days
-  if (gen_dates %in% as.Date(c("2025-12-29"))) {
-    fc_dates <- as.Date("2025-12-24")
-  }
+  fc_dates <- prod_forecast_date(gen_dates)
 } else {
   # NHSN RSV versions start 2024-12-11, so the replay starts there.
   gen_dates <- c(

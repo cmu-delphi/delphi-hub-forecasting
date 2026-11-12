@@ -57,7 +57,9 @@ get_socrata_updated_at <- function(dataset_url, missing_value) {
 #' Builds (or confirms up to date) the `nhsn_archive_data` and
 #' `nssp_archive_data` targets for the active `targets` project (selected via
 #' `TAR_PROJECT`/`TAR_CONFIG`, see `tar_config_get()`), then checks the latest
-#' `time_value` actually present in each archive against the current date.
+#' `time_value` actually present in each archive against the forecast date of
+#' today's prod round (`prod_forecast_date()`), so a delayed run is held to the
+#' same bar as a run on the round's Wednesday.
 #' Used by the production forecast cron/systemd job to decide whether to
 #' proceed with a forecast run or wait for newer data, rather than submitting
 #' a forecast built on stale inputs. Because these targets are `tar_change()`
@@ -78,7 +80,7 @@ check_data_freshness <- function(max_age_days = 7) {
   freshness <- tibble::tibble(
     source = c("nhsn", "nssp"),
     latest = latest,
-    age_days = as.numeric(Sys.Date() - latest),
+    age_days = as.numeric(prod_forecast_date(Sys.Date()) - latest),
     fresh = age_days <= max_age_days
   )
   cli::cli_inform(sprintf(

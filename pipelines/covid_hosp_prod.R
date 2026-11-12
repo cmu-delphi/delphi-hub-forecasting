@@ -48,15 +48,11 @@ g_reference_date <- {
 # stay row-aligned by construction (see flu_hosp_prod.R for column docs).
 if (!g_evaluation_mode) {
   # generation_date is the as_of for the forecast. If run on our typical
-  # schedule, it's today, a Wednesday; on a delayed forecast it's a Thursday.
-  # It's used for stamping the data and picking the as_of. Usually forecast_date
-  # equals it, but forecast_date can be overridden and should be a Wednesday.
+  # schedule, it's today, a Wednesday; on a delayed forecast it's later.
+  # It's used for stamping the data and picking the as_of. forecast_date is the
+  # round's Wednesday (see prod_forecast_date and DELAYED_PROD_RUNS).
   gen_dates <- g_reference_date
-  fc_dates <- floor_date(gen_dates, "weeks", week_start = 3)
-  # the forecast is actually for the wednesday beforehand for these days
-  if (gen_dates %in% as.Date(c("2025-12-29"))) {
-    fc_dates <- as.Date("2025-12-24")
-  }
+  fc_dates <- prod_forecast_date(gen_dates)
 } else {
   # Pin FORECAST_REFERENCE_DATE for a reproducible replay window; must be
   # >= 2025-12-31 so the trailing seq.Date() stays non-empty.

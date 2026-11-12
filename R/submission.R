@@ -20,9 +20,15 @@ write_submission_file <- function(pred, forecast_reference_date, submission_dire
 #' only the first 2048 characters of an error, so each check message is cut to
 #' `max_chars` to keep every failing check visible. Checks that attach their
 #' failing rows (the hub's custom checks) also get one line per location,
-#' target, and horizon.
-validate_submission_or_abort <- function(hub_path, file_path, max_chars = 300) {
-  validation <- hubValidations::validate_submission(hub_path, file_path = file_path)
+#' target, and horizon. On a listed delayed prod run (`DELAYED_PROD_RUNS`) the
+#' submission window check is skipped.
+validate_submission_or_abort <- function(hub_path, file_path, max_chars = 300,
+                                         skip_submit_window_check = is_delayed_prod_run(Sys.Date())) {
+  validation <- hubValidations::validate_submission(
+    hub_path,
+    file_path = file_path,
+    skip_submit_window_check = skip_submit_window_check
+  )
   # The result groups the checks by where they ran (hub config, then the file).
   checks <- unlist(unname(validation), recursive = FALSE)
   failing <- purrr::keep(checks, hubValidations::not_pass)
