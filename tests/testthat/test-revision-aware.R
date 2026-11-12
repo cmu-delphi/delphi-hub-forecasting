@@ -759,3 +759,36 @@ test_that("scaled_pop_seasonal_revision forecasts past a reporting gap, includin
     expect_forecasts_week(run_latent(snapshot, ahead), fixture$truth, fd + ahead)
   }
 })
+
+test_that("scaled_pop_seasonal_revision with fixed_seasonal_window does not pull the longest ahead down early in a season", {
+  set.seed(11)
+  last_week <- as.Date("2025-11-05")
+  weeks <- seq(as.Date("2021-07-07"), last_week, by = 7)
+  archive <- tidyr::expand_grid(geo_value = c("ca", "tx", "ny"), time_value = weeks) %>%
+    mutate(
+      peak = as.Date(paste0(lubridate::year(time_value - 182), "-12-10")),
+      value = 1 + 50 * exp(-as.numeric(time_value - peak)^2 / (2 * 21^2)) + rnorm(dplyr::n(), sd = 0.2),
+      source = "nhsn",
+      version = time_value
+    ) %>%
+    select(geo_value, time_value, source, version, value) %>%
+    as_epi_archive(other_keys = "source")
+  medians <- function(fixed) {
+    purrr::map(c(14, 21, 28), function(ahead) {
+      suppressMessages(scaled_pop_seasonal_revision(
+        archive,
+        outcome = "value", ahead = ahead, lags = c(0, 7), pop_scaling = FALSE,
+        scale_method = "none", center_method = "none", nonlin_method = "none",
+        fixed_seasonal_window = fixed, finalization_coverage = 0.8, finalization_min_value = 0
+      )) %>%
+        filter(quantile == 0.5) %>%
+        mutate(ahead = ahead)
+    }) %>%
+      bind_rows() %>%
+      arrange(geo_value, ahead)
+  }
+  fixed <- medians(TRUE)
+  growing <- medians(FALSE)
+  expect_true(all(fixed %>% summarize(rising = all(diff(value) > 0), .by = geo_value) %>% pull(rising)))
+  expect_false(isTRUE(all.equal(fixed$value, growing$value)))
+})

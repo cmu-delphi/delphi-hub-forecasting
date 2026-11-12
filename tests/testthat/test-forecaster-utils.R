@@ -107,3 +107,40 @@ test_that("scaled_pop_seasonal: a lagging geo does not shift the lags of other g
   }
   expect_equal(run(lagging), run(jhu))
 })
+
+# Weekly data with a sharp winter peak 5 weeks after the last observed week, so
+# start dates later in the season than the forecast are near or after the peak.
+early_ramp_data <- function() {
+  last_week <- as.Date("2025-11-05")
+  weeks <- seq(as.Date("2021-07-07"), last_week, by = 7)
+  tidyr::expand_grid(geo_value = c("ca", "tx", "ny"), time_value = weeks) %>%
+    mutate(
+      peak = as.Date(paste0(lubridate::year(time_value - 182), "-12-10")),
+      value = 1 + 50 * exp(-as.numeric(time_value - peak)^2 / (2 * 21^2)) + rnorm(dplyr::n(), sd = 0.2)
+    ) %>%
+    select(geo_value, time_value, value) %>%
+    as_epi_df(as_of = last_week + 7)
+}
+
+test_that("scaled_pop_seasonal with fixed_seasonal_window does not pull the longest ahead down early in a season", {
+  set.seed(11)
+  epi_data <- early_ramp_data()
+  medians <- function(fixed) {
+    purrr::map(c(14, 21, 28), function(ahead) {
+      scaled_pop_seasonal(
+        epi_data, "value",
+        ahead = ahead, pop_scaling = FALSE, lags = c(0, 7), seasonal_method = "window",
+        fixed_seasonal_window = fixed, trainer = epipredict::quantile_reg(method = "fn"),
+        scale_method = "none", center_method = "none", nonlin_method = "none"
+      ) %>%
+        filter(quantile == 0.5) %>%
+        mutate(ahead = ahead)
+    }) %>%
+      bind_rows() %>%
+      arrange(geo_value, ahead)
+  }
+  fixed <- medians(TRUE)
+  growing <- medians(FALSE)
+  expect_true(all(fixed %>% summarize(rising = all(diff(value) > 0), .by = geo_value) %>% pull(rising)))
+  expect_false(isTRUE(all.equal(fixed$value, growing$value)))
+})

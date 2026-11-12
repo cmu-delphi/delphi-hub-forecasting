@@ -14,6 +14,10 @@
 #'   question left up to each forecaster; see latency_adjusting.R for the
 #'   existing examples)
 #' @param pop_scaling an example extra parameter unique to this forecaster
+#' @param fixed_seasonal_window if FALSE, the seasonal forward window grows by
+#'   `ahead`. This adds training start dates later in the season than the
+#'   forecast, which early in a season are often at or after the peak and pull
+#'   the longest aheads down. If TRUE, the window is the same for all aheads.
 #' @param trainer an example extra parameter that is fairly common
 #' @param filter_source if multiple sources are mixed together, if this is non-null it filters to just ones that match this value
 #' @param filter_agg_level if multiple geographic levels are mixed together, if this is non-null it filters to just ones that match this value (e.g. you probably want "state")
@@ -48,6 +52,7 @@ scaled_pop_seasonal <- function(
   seasonal_method = c("none", "flu", "covid", "indicator", "window", "climatological"),
   seasonal_backward_window = 5 * 7,
   seasonal_forward_window = 3 * 7,
+  fixed_seasonal_window = FALSE,
   train_residual = FALSE,
   trainer = epipredict::quantile_reg(),
   quantile_levels = covidhub_probs(),
@@ -92,7 +97,7 @@ scaled_pop_seasonal <- function(
   args_input[["nonneg"]] <- if (!is.null(args_input[["nonneg"]])) args_input[["nonneg"]] else scale_method == "none"
   args_input[["seasonal_window"]] <- "window" %in% seasonal_method
   args_input[["seasonal_backward_window"]] <- seasonal_backward_window
-  args_input[["seasonal_forward_window"]] <- seasonal_forward_window + ahead
+  args_input[["seasonal_forward_window"]] <- seasonal_forward_window + if (fixed_seasonal_window) 0 else ahead
   args_list <- inject(default_args_list(!!!args_input))
   # if you want to hardcode particular predictors in a particular forecaster
   predictors <- c(outcome, extra_sources)

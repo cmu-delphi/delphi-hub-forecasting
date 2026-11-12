@@ -160,6 +160,8 @@ compute_finalization_lag_weeks <- function(
 #'   [scaled_pop_seasonal].
 #' @param seasonal_backward_window,seasonal_forward_window the seasonal training
 #'   window (in days) kept around the forecast's season week.
+#' @param fixed_seasonal_window if FALSE, the forward window grows by `ahead`;
+#'   if TRUE, it is the same for all aheads. See [scaled_pop_seasonal].
 #' @param trainer the (quantile) trainer; must be an [epipredict::quantile_reg].
 #' @param quantile_levels the quantile levels to predict.
 #' @param clip_lower whether to clip predictions at zero.
@@ -189,6 +191,7 @@ scaled_pop_seasonal_revision <- function(
   use_seasonal_window = TRUE,
   seasonal_backward_window = 5 * 7,
   seasonal_forward_window = 3 * 7,
+  fixed_seasonal_window = FALSE,
   trainer = epipredict::quantile_reg(method = "fn"),
   quantile_levels = covidhub_probs(),
   clip_lower = TRUE,
@@ -333,9 +336,10 @@ scaled_pop_seasonal_revision <- function(
     # a reporting gap on a prior year's anchor week (e.g. the Oct 2025 NHSN
     # shutdown) removes only the missing rows instead of that year's whole window.
     forecast_anchor <- max(forecast_rows$time_value)
-    anchor_dates <- seq(forecast_anchor, min(design$time_value) - seasonal_forward_window - ahead, by = -364L)
+    forward_window <- seasonal_forward_window + if (fixed_seasonal_window) 0 else ahead
+    anchor_dates <- seq(forecast_anchor, min(design$time_value) - forward_window, by = -364L)
     window_dates <- anchor_dates %>%
-      map(~ c(.x - seq_len(seasonal_backward_window), .x + 0:(seasonal_forward_window + ahead))) %>%
+      map(~ c(.x - seq_len(seasonal_backward_window), .x + 0:forward_window)) %>%
       unlist() %>%
       as.Date() %>%
       unique()
