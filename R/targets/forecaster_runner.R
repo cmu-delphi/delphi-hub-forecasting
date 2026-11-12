@@ -29,6 +29,9 @@
 #                          drives both the nhsn and nssp forecasts).
 # @param sort_quantiles    if TRUE, enforce quantile monotonicity on the output
 #                          (the flu whitening workaround; a no-op elsewhere).
+# @param max_latency_weeks geos whose latest primary-source week is more than
+#                          this many weeks before the forecast date are dropped
+#                          from the output (see late_primary_geos). Inf keeps all.
 # @return a forecast tibble on hub convention: the forecaster's core columns
 #   with `value`, a `forecaster` id, and target_end_date shifted per
 #   target_date_shift. forecast_date stays forecaster-native (the snapshot's
@@ -39,13 +42,16 @@ run_forecaster <- function(
   join_extra_data = FALSE, extra_data = NULL,
   filter_sources = NULL, excluded_geos = NULL,
   primary_source = NULL,
-  sort_quantiles = FALSE
+  sort_quantiles = FALSE,
+  max_latency_weeks = Inf
 ) {
   # Revision-aware forecasters are handed the (truncated) archive itself instead
   # of an as-of epi_df; the epi_df-only input munging below (source filter, extra
   # join) doesn't apply -- the forecaster reads sources/aux columns straight from
   # the archive. Output-side wrapping still runs identically on the forecast.
   is_archive <- inherits(snapshot, "epi_archive")
+  # The forecasters default primary_source to "nhsn", so do the same here.
+  late_geos <- late_primary_geos(snapshot, primary_source %||% "nhsn", max_latency_weeks)
   if (!is_archive && !is.null(filter_sources) && "source" %in% colnames(snapshot)) {
     snapshot <- snapshot %>% filter(source %in% filter_sources)
   }
@@ -68,9 +74,40 @@ run_forecaster <- function(
   }
   out %>%
     mutate(target_end_date = target_end_date + target_date_shift) %>%
-    filter(geo_value %nin% excluded_geos) %>%
+    filter(geo_value %nin% c(excluded_geos, late_geos)) %>%
     mutate(forecaster = id) %>%
     validate_forecast_output(id)
+}
+
+# Geos whose latest primary-source week in `snapshot` is more than
+# `max_latency_weeks` weeks before the snapshot's forecast date. Weekly data on
+# its normal schedule is 1 week latent, so 4 weeks drops a geo once it has
+# missed 4 reports in a row. The check uses only what the snapshot holds, so a
+# replayed forecast drops the same geos that a real-time run would have.
+#
+# @param snapshot          an as-of epi_df or a truncated epi_archive.
+# @param primary_source    the `source` whose latency counts; ignored when the
+#                          snapshot has no `source` column.
+# @param max_latency_weeks maximum latency in weeks; Inf drops nothing.
+late_primary_geos <- function(snapshot, primary_source, max_latency_weeks) {
+  if (is.infinite(max_latency_weeks)) {
+    return(character(0))
+  }
+  if (inherits(snapshot, "epi_archive")) {
+    forecast_date <- archive_forecast_date(snapshot)
+    rows <- epix_as_of(snapshot, snapshot$versions_end)
+  } else {
+    forecast_date <- attributes(snapshot)$metadata$as_of
+    rows <- snapshot
+  }
+  if ("source" %in% colnames(rows)) {
+    rows <- rows %>% filter(source == primary_source)
+  }
+  rows %>%
+    as_tibble() %>%
+    summarize(latest = max(time_value), .by = geo_value) %>%
+    filter(as.numeric(as.Date(forecast_date) - latest) > 7 * max_latency_weeks) %>%
+    pull(geo_value)
 }
 
 # Output-shape contract for everything run_forecaster ships: the storage-format

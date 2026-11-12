@@ -19,8 +19,8 @@ set_targets_config()
 g_aheads <- -1:3
 g_submission_directory <- Sys.getenv("COVID_SUBMISSION_DIRECTORY", "cache")
 g_insufficient_data_geos <- c("as", "mp", "vi", "gu")
-# Iowa NSSP is out for an extended period (from Oct 2026).
-g_insufficient_data_geos_nssp <- c(g_insufficient_data_geos, "ia")
+# Geos whose primary data has missed 4 or more reports in a row get no forecast.
+g_max_primary_latency_weeks <- 4
 g_time_value_adjust <- 3
 g_fetch_args <- epidatr::fetch_args_list(return_empty = FALSE, timeout_seconds = 400)
 g_disease <- "covid"
@@ -330,7 +330,7 @@ parameters_and_date_targets <- rlang::list2(
           time_value = floor_date(time_value, "week", week_start = 7) + 3,
           source = "nssp"
         ) %>%
-        filter(geo_value %nin% g_insufficient_data_geos_nssp) %>%
+        filter(geo_value %nin% g_insufficient_data_geos) %>%
         as_epi_archive(other_keys = "source", compactify = TRUE)
     }
   ),
@@ -433,7 +433,8 @@ forecast_targets <- tar_map(
         target_date_shift = target_date_shift,
         join_extra_data = join_extra_data, extra_data = nssp_exogenous_data,
         filter_sources = filter_sources, excluded_geos = excluded_geos,
-        sort_quantiles = sort_quantiles
+        sort_quantiles = sort_quantiles,
+        max_latency_weeks = g_max_primary_latency_weeks
       )
     },
     pattern = map(aheads),
@@ -485,6 +486,7 @@ forecast_targets <- tar_map(
         join_extra_data = join_extra_data, extra_data = full_data_modified,
         filter_sources = filter_sources, excluded_geos = excluded_geos,
         sort_quantiles = sort_quantiles,
+        max_latency_weeks = g_max_primary_latency_weeks,
         # nssp is the target here; snapshot rows are stamped source = "nssp".
         primary_source = "nssp"
       )
