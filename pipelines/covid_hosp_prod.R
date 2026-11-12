@@ -463,6 +463,7 @@ forecast_targets <- tar_map(
         p <- params[setdiff(names(params), "extra_sources")]
         if (is.list(p$lags)) p$lags <- p$lags[[1L]]
         p$finalization_min_value <- 0
+        p$pop_scaling <- FALSE
         p
       } else {
         params

@@ -407,6 +407,7 @@ forecast_targets <- tar_map(
       params_effective <- if (needs_archive) {
         p <- params
         p$finalization_min_value <- 0
+        p$pop_scaling <- FALSE
         p
       } else {
         params
