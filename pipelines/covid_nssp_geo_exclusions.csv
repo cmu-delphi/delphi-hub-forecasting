@@ -15,6 +15,21 @@ forecast_date,forecaster,geo_value,ahead,weight
 2024-10-01, revision_aware, all, 0, 1
 2024-10-01, revision_aware, us,, 0
 ##################
+# Nov 18
+##################
+2026-11-18, all, mp,, 0
+2026-11-18, windowed_seasonal, all,, 3
+2026-11-18, windowed_seasonal_extra_sources, all,, 0.5
+2026-11-18, climate_linear, all,, 0.001
+2026-11-18, linear_no_population_scale, all,, 3
+2026-11-18, linearlog, all,, 0
+2026-11-18, climate_base, all,, 2
+2026-11-18, climate_geo_agged, all,, 0
+2026-11-18, climate_quantile_extrapolated, all,, 0
+2026-11-18, revision_aware, all, -1, 10
+2026-11-18, revision_aware, all, 0, 1
+2026-11-18, revision_aware, us,, 0
+##################
 # Nov 11
 ##################
 2026-11-11, all, mp,, 0
@@ -28,6 +43,19 @@ forecast_date,forecaster,geo_value,ahead,weight
 2026-11-11, climate_quantile_extrapolated, all,, 0
 2026-11-11, revision_aware, all, -1, 10
 2026-11-11, revision_aware, all, 0, 1
+2026-11-11, revision_aware, ar,, 1
+2026-11-11, revision_aware, co,, 1
+2026-11-11, revision_aware, id,, 1
+2026-11-11, revision_aware, in,, 1
+2026-11-11, revision_aware, ks,, 1
+2026-11-11, revision_aware, ky,, 1
+2026-11-11, revision_aware, mo,, 1
+2026-11-11, revision_aware, ms,, 1
+2026-11-11, revision_aware, mt,, 1
+2026-11-11, revision_aware, ri,, 1
+2026-11-11, revision_aware, sc,, 1
+2026-11-11, revision_aware, va,, 1
+2026-11-11, revision_aware, wy,, 1
 2026-11-11, revision_aware, us,, 0
 ##################
 # Nov 4
