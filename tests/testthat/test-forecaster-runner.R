@@ -76,30 +76,87 @@ latency_archive <- function() {
     as_epi_archive(other_keys = "source", compactify = FALSE)
 }
 
-test_that("late_primary_geos drops a geo after 4 missed reports but not after 3", {
+test_that("late_input_geos drops a geo after 4 missed reports but not after 3", {
   snapshot <- latency_archive() %>%
     epix_as_of(as.Date("2026-11-11"))
   attributes(snapshot)$metadata$as_of <- as.Date("2026-11-11")
-  expect_identical(late_primary_geos(snapshot, "nhsn", 4), "de")
+  expect_identical(late_input_geos(snapshot, "nhsn", NULL, 4), "de")
 })
 
-test_that("late_primary_geos counts only the primary source", {
+test_that("late_input_geos counts only the primary source", {
   snapshot <- latency_archive() %>% epix_as_of(as.Date("2026-11-11"))
   attributes(snapshot)$metadata$as_of <- as.Date("2026-11-11")
-  expect_identical(late_primary_geos(snapshot, "nssp", 4), character(0))
+  expect_identical(late_input_geos(snapshot, "nssp", NULL, 4), character(0))
 })
 
-test_that("late_primary_geos drops nothing when the latency is unbounded", {
+test_that("late_input_geos drops nothing when the latency is unbounded", {
   snapshot <- latency_archive() %>% epix_as_of(as.Date("2026-11-11"))
-  expect_identical(late_primary_geos(snapshot, "nhsn", Inf), character(0))
+  expect_identical(late_input_geos(snapshot, "nhsn", NULL, Inf), character(0))
 })
 
-test_that("late_primary_geos reads an archive snapshot as of its forecast date", {
+test_that("late_input_geos reads an archive snapshot as of its forecast date", {
   current <- make_forecast_archive_snapshot(latency_archive(), "2026-11-11", "2026-11-11")
-  expect_identical(late_primary_geos(current, "nhsn", 4), "de")
+  expect_identical(late_input_geos(current, "nhsn", NULL, 4), "de")
   # On 2026-10-21, de had missed only one report, so a replay keeps it.
   replay <- make_forecast_archive_snapshot(latency_archive(), "2026-10-21", "2026-10-21")
-  expect_identical(late_primary_geos(replay, "nhsn", 4), character(0))
+  expect_identical(late_input_geos(replay, "nhsn", NULL, 4), character(0))
+})
+
+# nhsn current for every geo; the nssp column is current for ca, 4 weeks behind
+# for tx, 5 weeks behind for de, and absent for wy.
+extra_latency_archive <- function() {
+  nssp <- bind_rows(
+    weekly_rows("ca", "2026-11-04"),
+    weekly_rows("tx", "2026-10-14"),
+    weekly_rows("de", "2026-10-07")
+  ) %>%
+    select(geo_value, time_value, nssp = value)
+  c("ca", "tx", "de", "wy") %>%
+    map(\(geo) weekly_rows(geo, "2026-11-04")) %>%
+    bind_rows() %>%
+    left_join(nssp, by = join_by(geo_value, time_value)) %>%
+    as_epi_archive(other_keys = "source", compactify = FALSE)
+}
+
+current_extra_snapshot <- function() {
+  snapshot <- extra_latency_archive() %>% epix_as_of(as.Date("2026-11-11"))
+  attributes(snapshot)$metadata$as_of <- as.Date("2026-11-11")
+  snapshot
+}
+
+test_that("late_input_geos drops geos whose extra source is late or absent", {
+  late <- late_input_geos(current_extra_snapshot(), "nhsn", "nssp", 4)
+  expect_setequal(late, c("de", "wy"))
+})
+
+test_that("late_input_geos ignores extra columns that are not in extra_sources", {
+  expect_identical(late_input_geos(current_extra_snapshot(), "nhsn", NULL, 4), character(0))
+})
+
+test_that("late_input_geos checks extra columns in an archive snapshot", {
+  current <- make_forecast_archive_snapshot(extra_latency_archive(), "2026-11-11", "2026-11-11")
+  expect_setequal(late_input_geos(current, "nhsn", "nssp", 4), c("de", "wy"))
+})
+
+test_that("run_forecaster drops geos whose joined extra data is late", {
+  snapshot <- current_extra_snapshot() %>% select(-nssp)
+  extra_data <- current_extra_snapshot() %>%
+    as_tibble() %>%
+    select(geo_value, time_value, nssp)
+  original <- get_partially_applied_forecaster
+  withr::defer(assign("get_partially_applied_forecaster", original, envir = globalenv()))
+  assign("get_partially_applied_forecaster", function(...) {
+    function(epi_data) {
+      tidyr::expand_grid(geo_value = c("ca", "tx", "de", "wy"), quantile = c(0.25, 0.5, 0.75)) %>%
+        mutate(forecast_date = as.Date("2026-11-11"), target_end_date = as.Date("2026-11-18"), value = quantile)
+    }
+  }, envir = globalenv())
+  out <- run_forecaster(
+    snapshot, "unused",
+    aheads = 7, params = list(extra_sources = "nssp"), id = "test",
+    join_extra_data = TRUE, extra_data = extra_data, max_latency_weeks = 4
+  )
+  expect_setequal(unique(out$geo_value), c("ca", "tx"))
 })
 
 test_that("run_forecaster drops late geos from the output", {

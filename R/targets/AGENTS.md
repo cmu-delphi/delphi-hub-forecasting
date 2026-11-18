@@ -4,7 +4,7 @@
 
 ## Files
 
-- **forecaster_runner.R** — `run_forecaster`: cross-cutting conventions (ahead scaling, source filtering, extra-data join, target-date shift, geo exclusions, id stamping, output validation). `late_primary_geos` finds geos whose primary source is more than `max_latency_weeks` behind the snapshot's forecast date; prod drops them from the output. Called per (forecaster, date) branch.
+- **forecaster_runner.R** — `run_forecaster`: cross-cutting conventions (ahead scaling, source filtering, extra-data join, target-date shift, geo exclusions, id stamping, output validation). `late_input_geos` finds geos whose primary source or any `extra_sources` column is more than `max_latency_weeks` behind the snapshot's forecast date; prod drops them from the output. Called per (forecaster, date) branch.
 - **ensemble_runner.R** — `run_ensemble`: component presence assertion, method dispatch (`climate_linear` / `mean` / `weighted`), geo exclusion, id stamping, output validation.
 - **prod_shared.R** — `build_prod_ensemble_targets`: declarative ensemble target factory for flu and covid prod pipelines.
 - **flu_data_targets.R**, **covid_data_targets.R**, **rsv_data_targets.R** — Disease-specific archive and data target factories (`nhsn_prod_archive`, `nssp_target_archive`, etc.).

@@ -29,9 +29,10 @@
 #                          drives both the nhsn and nssp forecasts).
 # @param sort_quantiles    if TRUE, enforce quantile monotonicity on the output
 #                          (the flu whitening workaround; a no-op elsewhere).
-# @param max_latency_weeks geos whose latest primary-source week is more than
+# @param max_latency_weeks geos whose latest primary-source week, or latest
+#                          week of any `extra_sources` column, is more than
 #                          this many weeks before the forecast date are dropped
-#                          from the output (see late_primary_geos). Inf keeps all.
+#                          from the output (see late_input_geos). Inf keeps all.
 # @return a forecast tibble on hub convention: the forecaster's core columns
 #   with `value`, a `forecaster` id, and target_end_date shifted per
 #   target_date_shift. forecast_date stays forecaster-native (the snapshot's
@@ -50,8 +51,6 @@ run_forecaster <- function(
   # join) doesn't apply -- the forecaster reads sources/aux columns straight from
   # the archive. Output-side wrapping still runs identically on the forecast.
   is_archive <- inherits(snapshot, "epi_archive")
-  # The forecasters default primary_source to "nhsn", so do the same here.
-  late_geos <- late_primary_geos(snapshot, primary_source %||% "nhsn", max_latency_weeks)
   if (!is_archive && !is.null(filter_sources) && "source" %in% colnames(snapshot)) {
     snapshot <- snapshot %>% filter(source %in% filter_sources)
   }
@@ -63,6 +62,11 @@ run_forecaster <- function(
   if (!is_archive && join_extra_data) {
     snapshot <- snapshot %>% left_join(extra_data, by = join_by(geo_value, time_value))
   }
+  # Do the check after the join so that the joined extra columns are present.
+  # The forecasters default primary_source to "nhsn", so do the same here.
+  late_geos <- late_input_geos(
+    snapshot, primary_source %||% "nhsn", unlist(params$extra_sources), max_latency_weeks
+  )
   forecaster_fn <- get_partially_applied_forecaster(forecaster, aheads, params)
   out <- forecaster_fn(snapshot)
   if (join_extra_data && "source" %in% colnames(out)) {
@@ -79,17 +83,21 @@ run_forecaster <- function(
     validate_forecast_output(id)
 }
 
-# Geos whose latest primary-source week in `snapshot` is more than
-# `max_latency_weeks` weeks before the snapshot's forecast date. Weekly data on
-# its normal schedule is 1 week latent, so 4 weeks drops a geo once it has
-# missed 4 reports in a row. The check uses only what the snapshot holds, so a
-# replayed forecast drops the same geos that a real-time run would have.
+# Geos whose latest primary-source week in `snapshot`, or latest non-NA week of
+# any `extra_sources` column, is more than `max_latency_weeks` weeks before the
+# snapshot's forecast date. A geo with no non-NA value in an extra column is
+# late. Weekly data on its normal schedule is 1 week latent, so 4 weeks drops a
+# geo once it has missed 4 reports in a row. The check uses only what the
+# snapshot holds, so a replayed forecast drops the same geos that a real-time
+# run would have.
 #
-# @param snapshot          an as-of epi_df or a truncated epi_archive.
-# @param primary_source    the `source` whose latency counts; ignored when the
+# @param snapshot          an as-of epi_df or a truncated epi_archive, with the
+#                          extra columns already joined.
+# @param primary_source    the `source` whose rows count; ignored when the
 #                          snapshot has no `source` column.
+# @param extra_sources     predictor columns that must also be current.
 # @param max_latency_weeks maximum latency in weeks; Inf drops nothing.
-late_primary_geos <- function(snapshot, primary_source, max_latency_weeks) {
+late_input_geos <- function(snapshot, primary_source, extra_sources, max_latency_weeks) {
   if (is.infinite(max_latency_weeks)) {
     return(character(0))
   }
@@ -103,11 +111,14 @@ late_primary_geos <- function(snapshot, primary_source, max_latency_weeks) {
   if ("source" %in% colnames(rows)) {
     rows <- rows %>% filter(source == primary_source)
   }
-  rows %>%
-    as_tibble() %>%
-    summarize(latest = max(time_value), .by = geo_value) %>%
-    filter(as.numeric(as.Date(forecast_date) - latest) > 7 * max_latency_weeks) %>%
-    pull(geo_value)
+  rows <- as_tibble(rows)
+  recent <- rows %>% filter(time_value >= as.Date(forecast_date) - 7 * max_latency_weeks)
+  on_time <- reduce(
+    extra_sources,
+    \(geos, col) intersect(geos, recent$geo_value[!is.na(recent[[col]])]),
+    .init = unique(recent$geo_value)
+  )
+  setdiff(unique(rows$geo_value), on_time)
 }
 
 # Output-shape contract for everything run_forecaster ships: the storage-format
